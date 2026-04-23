@@ -1,26 +1,32 @@
-import { Twitter, Linkedin, Instagram, Github, ArrowUpRight } from 'lucide-react'
-
-const links = {
-  Services: ['Website Development', 'Software Development', 'Mobile App Development', 'UI/UX Design'],
-  Company: ['About Us', 'Our Work', 'Process', 'Pricing', 'FAQ'],
-  Connect: [
-    { label: 'sales@9x.design', href: 'mailto:sales@9x.design' },
-    { label: '+91 98765 43210', href: 'tel:+919876543210' },
-    { label: 'WhatsApp', href: 'https://wa.me/919876543210' },
-    { label: 'Book a Call', href: '#contact' },
-  ],
-}
+import { Twitter, Instagram, Facebook, ArrowUpRight } from 'lucide-react'
 
 const socials = [
-  { icon: Twitter, href: '#', label: 'Twitter' },
-  { icon: Linkedin, href: '#', label: 'LinkedIn' },
-  { icon: Instagram, href: '#', label: 'Instagram' },
-  { icon: Github, href: '#', label: 'GitHub' },
+  { icon: Twitter, href: 'https://twitter.com/9xdesign', label: 'Twitter' },
+  { icon: Instagram, href: 'https://instagram.com/9x.design', label: 'Instagram' },
+  { icon: Facebook, href: 'https://facebook.com/9x.design', label: 'Facebook' },
 ]
 
-function isConnectLinkList(arr: any): arr is { label: string; href: string }[] {
-  return Array.isArray(arr) && arr.length > 0 && typeof arr[0] === 'object'
-}
+const servicesLinks: { label: string; href: string }[] = [
+  { label: 'Website Development', href: '#services' },
+  { label: 'Software Development', href: '#services' },
+  { label: 'Mobile App Development', href: '#services' },
+  { label: 'UI/UX Design', href: '#services' },
+]
+
+const companyLinks: { label: string; href: string }[] = [
+  { label: 'About Us', href: '#about' },
+  { label: 'Our Work', href: '#work' },
+  { label: 'Process', href: '#process' },
+  { label: 'Pricing', href: '#pricing' },
+  { label: 'FAQ', href: '#faq' },
+]
+
+const connectLinks: { label: string; href: string; external?: boolean }[] = [
+  { label: 'sales@9x.design', href: 'mailto:sales@9x.design' },
+  { label: '+91 98765 43210', href: 'tel:+919876543210' },
+  { label: 'WhatsApp', href: 'https://wa.me/919876543210', external: true },
+  { label: 'Book a Call', href: '#contact' },
+]
 
 export default function Footer() {
   return (
@@ -49,6 +55,8 @@ export default function Footer() {
                 <a
                   key={social.label}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={social.label}
                   data-testid={`social-${social.label.toLowerCase()}`}
                   className="w-9 h-9 rounded-lg border border-border/60 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-all duration-200"
@@ -59,58 +67,75 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Links */}
-          {Object.entries(links).map(([group, items]) => (
-            <div key={group}>
-              <h4
-                className="text-sm font-semibold mb-4"
-                style={{ fontFamily: 'Space Grotesk, sans-serif' }}
-              >
-                {group}
-              </h4>
-              <ul className="flex flex-col gap-2.5">
-                {isConnectLinkList(items)
-                  ? items.map((item) => (
-                      <li key={item.label}>
-                        <a
-                          href={item.href}
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 inline-flex items-center gap-1"
-                          {...(item.href.startsWith('http')
-                            ? { target: '_blank', rel: 'noopener noreferrer' }
-                            : {})}
-                        >
-                          {item.label}
-                          {item.href.startsWith('http') && (
-                            <ArrowUpRight size={12} className="opacity-60" />
-                          )}
-                        </a>
-                      </li>
-                    ))
-                  : (items as string[]).map((item) => (
-                      <li key={item}>
-                        <a
-                          href={
-                            item === 'Pricing'
-                              ? '#pricing'
-                              : item === 'FAQ'
-                              ? '#faq'
-                              : item === 'Process'
-                              ? '#process'
-                              : item === 'Our Work'
-                              ? '#work'
-                              : item === 'About Us'
-                              ? '#about'
-                              : '#services'
-                          }
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
-                        >
-                          {item}
-                        </a>
-                      </li>
-                    ))}
-              </ul>
-            </div>
-          ))}
+          {/* Services */}
+          <div>
+            <h4
+              className="text-sm font-semibold mb-4"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
+              Services
+            </h4>
+            <ul className="flex flex-col gap-2.5">
+              {servicesLinks.map((item) => (
+                <li key={item.label}>
+                  <a
+                    href={item.href}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Company */}
+          <div>
+            <h4
+              className="text-sm font-semibold mb-4"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
+              Company
+            </h4>
+            <ul className="flex flex-col gap-2.5">
+              {companyLinks.map((item) => (
+                <li key={item.label}>
+                  <a
+                    href={item.href}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Connect */}
+          <div>
+            <h4
+              className="text-sm font-semibold mb-4"
+              style={{ fontFamily: 'Space Grotesk, sans-serif' }}
+            >
+              Connect
+            </h4>
+            <ul className="flex flex-col gap-2.5">
+              {connectLinks.map((item) => (
+                <li key={item.label}>
+                  <a
+                    href={item.href}
+                    className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200 inline-flex items-center gap-1"
+                    {...(item.external
+                      ? { target: '_blank', rel: 'noopener noreferrer' }
+                      : {})}
+                  >
+                    {item.label}
+                    {item.external && <ArrowUpRight size={12} className="opacity-60" />}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         {/* Bottom */}

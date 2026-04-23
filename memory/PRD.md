@@ -48,16 +48,28 @@ Original: https://github.com/iamsjtitu/9x-design-studio (Vite + React + TS + Tai
 - SEO: expanded `<title>`, `<meta description>`, OG tags, Twitter card, JSON-LD ProfessionalService schema, canonical link
 - Tested end-to-end: 9/9 backend pytest + manual frontend walkthrough (form submit verified, modal verified, WhatsApp verified)
 
+### Session 2 — 2026-01-23
+- **RESEND_API_KEY** configured with user-provided key (re_FS8RA...)
+- Resend is in **testing mode** — owner's verified email is `iamsjtitu@gmail.com`. Leads are temporarily routed to this inbox.
+- `.env` now has `TARGET_EMAIL_AFTER_DOMAIN_VERIFY=sales@9x.design` as a reminder of the production target.
+- Verified email delivery end-to-end — Rahul Sharma lead sent successfully, `email_sent=true` in DB, Resend returned a message id.
+- **Footer socials** updated to Twitter, Instagram, Facebook (removed LinkedIn + GitHub per user request). Handles:
+  - https://twitter.com/9xdesign
+  - https://instagram.com/9x.design
+  - https://facebook.com/9x.design
+- `index.html` JSON-LD `sameAs` schema updated to match new socials.
+
 ## Prioritized backlog (P0 → P2)
-- P0 — User adds `RESEND_API_KEY` in `/app/backend/.env` to activate email notifications (currently lead saves but email skipped)
-- P0 — Replace placeholder social links in Footer with real ones (Twitter/LinkedIn/Instagram/GitHub)
-- P1 — Protect `/api/leads` with simple admin auth before any production ship
-- P1 — Optional: hook up a simple `/admin/leads` dashboard page
-- P1 — Real portfolio data + logos (replace Unsplash stock)
-- P1 — Rate-limit `/api/contact` (spam protection — honeypot + IP throttle)
+- P0 — User must verify `9x.design` domain at https://resend.com/domains, then update `.env`:
+  - Change `SENDER_EMAIL` from `onboarding@resend.dev` → `hello@9x.design` (or similar)
+  - Change `RECEIVER_EMAIL` from `iamsjtitu@gmail.com` → `sales@9x.design`
+  - Restart backend → leads will route to sales@9x.design
+- P1 — Protect `/api/leads` with simple admin auth before production
+- P1 — Build `/admin` dashboard UI (user expressed interest)
+- P1 — Real portfolio data + real client logos (replace Unsplash stock + generic names)
+- P1 — Rate-limit `/api/contact` (honeypot + IP throttle)
 - P2 — Live chat / Calendly booking integration
 - P2 — Blog / case-study pages with shareable URLs
-- P2 — Multi-language (Hindi / English) toggle
 - P2 — Analytics (GA4 / Plausible)
 
 ## Not in scope
