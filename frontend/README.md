@@ -1,70 +1,59 @@
-# Getting Started with Create React App
+# Enhanced Vite React TypeScript Template
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This template includes built-in detection for missing CSS variables between your Tailwind config and CSS files.
+
+## Features
+
+- **CSS Variable Detection**: Automatically detects if CSS variables referenced in `tailwind.config.cjs` are defined in `src/index.css`
+- **Enhanced Linting**: Includes ESLint, Stylelint, and custom CSS variable validation
+- **Shadcn/ui**: Pre-configured with all Shadcn components
+- **Modern Stack**: Vite + React + TypeScript + Tailwind CSS
 
 ## Available Scripts
 
-In the project directory, you can run:
+```bash
+# Run all linting (includes CSS variable check)
+npm run lint
 
-### `npm start`
+# Check only CSS variables
+npm run check:css-vars
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+# Individual linting
+npm run lint:js    # ESLint
+npm run lint:css   # Stylelint
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## CSS Variable Detection
 
-### `npm test`
+The template includes a custom script that:
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+1. **Parses `tailwind.config.cjs`** to find all `var(--variable)` references
+2. **Parses `src/index.css`** to find all defined CSS variables (`--variable:`)
+3. **Cross-references** them to find missing definitions
+4. **Reports undefined variables** with clear error messages
 
-### `npm run build`
+### Example Output
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+When CSS variables are missing:
+```
+❌ Undefined CSS variables found in tailwind.config.cjs:
+   --sidebar-background
+   --sidebar-foreground
+   --sidebar-primary
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Add these variables to src/index.css
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+When all variables are defined:
+```
+✅ All CSS variables in tailwind.config.cjs are defined
+```
 
-### `npm run eject`
+## How It Works
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+The detection happens during the `npm run lint` command, which will:
+- Exit with error code 1 if undefined variables are found
+- Show exactly which variables need to be added to your CSS file
+- Integrate seamlessly with your development workflow
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This prevents runtime CSS issues where Tailwind classes reference undefined CSS variables.
