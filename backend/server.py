@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import asyncio
+import html
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -86,6 +87,14 @@ def _build_lead_email_html(lead: Lead) -> str:
         "other": "Other",
     }.get(lead.service, lead.service.title())
 
+    # Escape user-provided content before injecting into the HTML template
+    e_name = html.escape(lead.name)
+    e_email = html.escape(lead.email)
+    e_message = html.escape(lead.message)
+    e_company = html.escape(lead.company) if lead.company else ''
+    e_budget = html.escape(lead.budget) if lead.budget else ''
+    first_name = html.escape(lead.name.split()[0]) if lead.name.strip() else 'them'
+
     return f"""\
 <!doctype html>
 <html>
@@ -97,8 +106,8 @@ def _build_lead_email_html(lead: Lead) -> str:
           <tr>
             <td style="background:linear-gradient(135deg,#FF4400,#FFA500);padding:28px 32px;color:#ffffff;">
               <div style="font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:0.9;">9x.design · New Lead</div>
-              <div style="font-size:24px;font-weight:700;margin-top:6px;">{lead.name}</div>
-              <div style="font-size:14px;opacity:0.9;margin-top:2px;">{lead.email}</div>
+              <div style="font-size:24px;font-weight:700;margin-top:6px;">{e_name}</div>
+              <div style="font-size:14px;opacity:0.9;margin-top:2px;">{e_email}</div>
             </td>
           </tr>
           <tr>
@@ -110,19 +119,19 @@ def _build_lead_email_html(lead: Lead) -> str:
                 <tr>
                   <td style="padding:0 0 16px 0;font-size:15px;color:#111827;font-weight:600;">{service_label}</td>
                 </tr>
-                {"<tr><td style='padding:6px 0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;'>Company</td></tr><tr><td style='padding:0 0 16px 0;font-size:15px;color:#111827;'>" + lead.company + "</td></tr>" if lead.company else ""}
-                {"<tr><td style='padding:6px 0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;'>Budget</td></tr><tr><td style='padding:0 0 16px 0;font-size:15px;color:#111827;'>" + lead.budget + "</td></tr>" if lead.budget else ""}
+                {"<tr><td style='padding:6px 0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;'>Company</td></tr><tr><td style='padding:0 0 16px 0;font-size:15px;color:#111827;'>" + e_company + "</td></tr>" if e_company else ""}
+                {"<tr><td style='padding:6px 0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;'>Budget</td></tr><tr><td style='padding:0 0 16px 0;font-size:15px;color:#111827;'>" + e_budget + "</td></tr>" if e_budget else ""}
                 <tr>
                   <td style="padding:6px 0;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Project Details</td>
                 </tr>
                 <tr>
-                  <td style="padding:0;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap;">{lead.message}</td>
+                  <td style="padding:0;font-size:15px;line-height:1.6;color:#111827;white-space:pre-wrap;">{e_message}</td>
                 </tr>
               </table>
               <hr style="border:0;border-top:1px solid #e5e7eb;margin:24px 0;" />
               <p style="font-size:12px;color:#6b7280;margin:0;">Received on {lead.created_at.strftime('%d %b %Y, %H:%M UTC')} · Lead ID: {lead.id}</p>
               <div style="margin-top:20px;">
-                <a href="mailto:{lead.email}" style="display:inline-block;background:#FF4400;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Reply to {lead.name.split()[0]}</a>
+                <a href="mailto:{e_email}" style="display:inline-block;background:#FF4400;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;font-size:14px;">Reply to {first_name}</a>
               </div>
             </td>
           </tr>

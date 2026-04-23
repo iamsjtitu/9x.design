@@ -79,10 +79,18 @@ export default function Contact() {
       setSent(true)
       toast.success("Thanks! We'll be in touch within 24 hours.")
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'Something went wrong. Please try again.'
+      let msg = 'Something went wrong. Please try again.'
+      const detail = err?.response?.data?.detail
+      if (typeof detail === 'string') {
+        msg = detail
+      } else if (Array.isArray(detail) && detail.length > 0) {
+        // FastAPI 422 validation errors → format first issue for the user
+        const first = detail[0]
+        const field = Array.isArray(first?.loc) ? first.loc.slice(-1)[0] : 'field'
+        msg = `${String(field).replace(/_/g, ' ')}: ${first?.msg || 'invalid value'}`
+      } else if (err?.message) {
+        msg = err.message
+      }
       setError(msg)
       toast.error(msg)
     } finally {
@@ -314,6 +322,7 @@ export default function Contact() {
                   </label>
                   <textarea
                     required
+                    minLength={5}
                     rows={4}
                     placeholder="Tell us about your project, goals, and timeline..."
                     value={form.message}
