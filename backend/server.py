@@ -1,12 +1,14 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Header
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
 import asyncio
 import html
 import logging
+import secrets
+import subprocess
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import Optional
@@ -30,6 +32,14 @@ FRONTEND_DIST_DIR = os.environ.get(
     str((ROOT_DIR / '..' / 'frontend' / 'dist').resolve()),
 )
 SERVE_STATIC = os.environ.get('SERVE_STATIC', 'false').lower() in ('1', 'true', 'yes')
+
+# Deploy config (for one-click GitHub auto-update)
+DEPLOY_SECRET = os.environ.get('DEPLOY_SECRET', '')
+DEPLOY_REPO_DIR = os.environ.get(
+    'DEPLOY_REPO_DIR',
+    str((ROOT_DIR / '..').resolve()),
+)
+DEPLOY_LOG_FILE = os.environ.get('DEPLOY_LOG_FILE', '/var/log/9x-deploy.log')
 
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
@@ -216,6 +226,121 @@ async def submit_contact(payload: LeadCreate):
     return ContactResponse(id=lead.id)
 
 
+# ── Deploy (one-click GitHub auto-update) ────────────────────────────────────
+def _verify_deploy_token(token: str) -> bool:
+    """Constant-time token comparison."""
+    if not DEPLOY_SECRET or not token:
+        return False
+    return secrets.compare_digest(token, DEPLOY_SECRET)
+
+
+def _git(*args: str, cwd: str | None = None) -> str:
+    """Run a git command and return stdout (stripped)."""
+    result = subprocess.run(
+        ['git', *args],
+        cwd=cwd or DEPLOY_REPO_DIR,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        raise HTTPException(500, f"git {args[0]} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+@api_router.get("/deploy/status")
+async def deploy_status(x_deploy_token: str = Header(default="")):
+    """Check current version and whether an update is available."""
+    if not _verify_deploy_token(x_deploy_token):
+        raise HTTPException(401, "Invalid deploy token")
+
+    try:
+        current = _git('rev-parse', 'HEAD')
+        # Fetch latest from remote (quiet)
+        subprocess.run(
+            ['git', 'fetch', '--all', '-q'],
+            cwd=DEPLOY_REPO_DIR,
+            capture_output=True,
+            timeout=30,
+        )
+        # Resolve default remote branch (origin/HEAD)
+        try:
+            remote = _git('rev-parse', 'origin/HEAD')
+        except HTTPException:
+            remote = _git('rev-parse', 'origin/main')
+        latest_commit = _git(
+            'log', '-1', '--pretty=%h · %s · %an · %ar',
+            remote,
+        )
+        return {
+            'current_sha': current[:7],
+            'remote_sha': remote[:7],
+            'has_update': current != remote,
+            'latest_commit': latest_commit,
+            'repo_dir': DEPLOY_REPO_DIR,
+        }
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Git timed out — check network / repo access")
+
+
+@api_router.post("/deploy/run")
+async def deploy_run(x_deploy_token: str = Header(default="")):
+    """Trigger deploy.sh in background (detached). Returns immediately."""
+    if not _verify_deploy_token(x_deploy_token):
+        raise HTTPException(401, "Invalid deploy token")
+
+    deploy_script = Path(DEPLOY_REPO_DIR) / 'deploy.sh'
+    if not deploy_script.is_file():
+        raise HTTPException(
+            500,
+            f"deploy.sh not found at {deploy_script}. "
+            "See README for setup.",
+        )
+
+    # Detach child process so systemctl restart can kill uvicorn without
+    # killing the deploy script. nohup + new session = fully independent.
+    subprocess.Popen(
+        [
+            'bash', '-c',
+            f'nohup bash {deploy_script} >> {DEPLOY_LOG_FILE} 2>&1 &',
+        ],
+        start_new_session=True,
+    )
+    logger.info("Deploy triggered via API")
+    return {
+        'status': 'started',
+        'log_file': DEPLOY_LOG_FILE,
+        'message': (
+            "Deploy started in background. The service will restart in ~30–60s. "
+            "Use /api/deploy/logs to tail output."
+        ),
+    }
+
+
+@api_router.get("/deploy/logs")
+async def deploy_logs(
+    x_deploy_token: str = Header(default=""),
+    tail: int = 200,
+):
+    """Return the last N lines of the deploy log."""
+    if not _verify_deploy_token(x_deploy_token):
+        raise HTTPException(401, "Invalid deploy token")
+
+    tail = max(1, min(int(tail), 2000))
+    if not Path(DEPLOY_LOG_FILE).is_file():
+        return {'logs': '(no deploy runs yet)', 'file': DEPLOY_LOG_FILE}
+
+    try:
+        out = subprocess.check_output(
+            ['tail', '-n', str(tail), DEPLOY_LOG_FILE],
+            text=True,
+        )
+        return {'logs': out, 'file': DEPLOY_LOG_FILE}
+    except Exception as e:
+        return {'logs': f'Error reading logs: {e}', 'file': DEPLOY_LOG_FILE}
+
+
+# ── Include router ───────────────────────────────────────────────────────────
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -226,6 +351,264 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Deploy console (self-contained HTML, obscured URL) ──────────────────────
+DEPLOY_PAGE_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>9x.design · Deploy Console</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #111418; --border: #1f242c;
+    --text: #e7ecf2; --muted: #8b95a5; --primary: #FF4400;
+    --ok: #2dd4a4; --err: #ef4444; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.5; }
+  .wrap { max-width: 720px; margin: 40px auto; padding: 0 20px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+  .brand-mark { width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--primary), #ffa500);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: white; font-size: 13px; }
+  .brand-text { font-weight: 700; letter-spacing: -0.02em; font-size: 18px; }
+  .brand-sub { color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 2px; margin-left: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 24px; margin-bottom: 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .muted { color: var(--muted); }
+  label { display: block; font-size: 12px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+  input[type=password], input[type=text] {
+    width: 100%; padding: 11px 14px; background: #0b0d12; color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; font-size: 14px;
+    font-family: inherit; outline: none; transition: border .15s;
+  }
+  input:focus { border-color: var(--primary); }
+  button { display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; background: var(--primary); color: white; border: 0;
+    border-radius: 10px; font-weight: 600; font-size: 14px; cursor: pointer;
+    transition: transform .15s, opacity .15s; font-family: inherit; }
+  button:hover { transform: translateY(-1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  button.ghost { background: transparent; color: var(--text);
+    border: 1px solid var(--border); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .status-row { display: flex; justify-content: space-between; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 13px; }
+  .status-row:last-child { border: 0; }
+  .status-row .k { color: var(--muted); text-transform: uppercase;
+    font-size: 11px; letter-spacing: 1.5px; }
+  .status-row .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .pill.ok { background: rgba(45,212,164,.15); color: var(--ok);
+    border: 1px solid rgba(45,212,164,.3); }
+  .pill.warn { background: rgba(245,158,11,.15); color: var(--warn);
+    border: 1px solid rgba(245,158,11,.3); }
+  pre.logs { background: #05070a; border: 1px solid var(--border);
+    padding: 16px; border-radius: 10px; max-height: 400px; overflow: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+    line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    color: #cdd3de; margin: 12px 0 0; }
+  .error { background: rgba(239,68,68,.1); color: var(--err);
+    border: 1px solid rgba(239,68,68,.3); padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; margin-top: 12px; }
+  .success { background: rgba(45,212,164,.1); color: var(--ok);
+    border: 1px solid rgba(45,212,164,.3); padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; margin-top: 12px; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor;
+    border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <div class="brand-mark">9x</div>
+    <div class="brand-text">9x.design</div>
+    <div class="brand-sub">Deploy Console</div>
+  </div>
+
+  <div id="auth-panel" class="panel">
+    <h1>Enter deploy password</h1>
+    <p class="muted" style="margin:4px 0 18px">Password is your <code>DEPLOY_SECRET</code> from backend <code>.env</code>.</p>
+    <label>Password</label>
+    <input id="token" type="password" autocomplete="current-password" placeholder="••••••••••••••••" autofocus />
+    <div class="row"><button id="auth-btn">Unlock</button></div>
+    <div id="auth-error" class="error hidden"></div>
+  </div>
+
+  <div id="main-panel" class="hidden">
+    <div class="panel">
+      <h1>Current version</h1>
+      <div id="status-box">
+        <div class="muted" style="margin-top:8px">Loading…</div>
+      </div>
+      <div class="row">
+        <button id="check-btn" class="ghost">↻ Refresh</button>
+        <button id="deploy-btn">⬇ Deploy latest</button>
+        <button id="logs-btn" class="ghost">📜 Show logs</button>
+        <button id="logout-btn" class="ghost" style="margin-left:auto">Logout</button>
+      </div>
+      <div id="action-result" class="hidden"></div>
+    </div>
+
+    <div id="logs-panel" class="panel hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h1 style="margin:0">Deploy logs</h1>
+        <button id="logs-refresh" class="ghost">↻ Refresh</button>
+      </div>
+      <pre id="logs-out" class="logs">Loading logs…</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN_KEY = '9x_deploy_token';
+let token = sessionStorage.getItem(TOKEN_KEY) || '';
+
+const el = (id) => document.getElementById(id);
+const show = (e) => e.classList.remove('hidden');
+const hide = (e) => e.classList.add('hidden');
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, {
+    ...opts,
+    headers: { 'X-Deploy-Token': token, ...(opts.headers || {}) },
+  });
+  if (res.status === 401) { throw new Error('Invalid password'); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { throw new Error(data.detail || `HTTP ${res.status}`); }
+  return data;
+}
+
+function showError(elm, msg) {
+  elm.textContent = msg;
+  elm.className = 'error';
+  show(elm);
+}
+function showSuccess(elm, msg) {
+  elm.textContent = msg;
+  elm.className = 'success';
+  show(elm);
+}
+
+async function renderStatus() {
+  el('status-box').innerHTML = '<div class="muted" style="margin-top:8px"><span class="spinner"></span> Fetching…</div>';
+  try {
+    const s = await api('/deploy/status');
+    const pill = s.has_update
+      ? '<span class="pill warn">Update available</span>'
+      : '<span class="pill ok">Up to date</span>';
+    el('status-box').innerHTML = `
+      <div class="status-row"><span class="k">State</span><span class="v">${pill}</span></div>
+      <div class="status-row"><span class="k">Current SHA</span><span class="v">${s.current_sha}</span></div>
+      <div class="status-row"><span class="k">Remote SHA</span><span class="v">${s.remote_sha}</span></div>
+      <div class="status-row"><span class="k">Latest commit</span><span class="v">${s.latest_commit || '-'}</span></div>
+    `;
+    el('deploy-btn').disabled = !s.has_update;
+  } catch (e) {
+    el('status-box').innerHTML = `<div class="error">${e.message}</div>`;
+  }
+}
+
+el('auth-btn').addEventListener('click', async () => {
+  const val = el('token').value.trim();
+  if (!val) return;
+  token = val;
+  try {
+    // Validate by hitting status endpoint
+    const res = await fetch('/api/deploy/status', { headers: { 'X-Deploy-Token': val } });
+    if (res.status === 401) throw new Error('Invalid password');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    sessionStorage.setItem(TOKEN_KEY, val);
+    hide(el('auth-panel'));
+    show(el('main-panel'));
+    renderStatus();
+  } catch (e) {
+    token = '';
+    showError(el('auth-error'), e.message);
+  }
+});
+
+el('token').addEventListener('keydown', (e) => { if (e.key === 'Enter') el('auth-btn').click(); });
+
+el('check-btn').addEventListener('click', renderStatus);
+
+el('deploy-btn').addEventListener('click', async () => {
+  const result = el('action-result');
+  hide(result);
+  if (!confirm('Pull latest from GitHub, rebuild frontend, and restart the service?\\n\\nSite will be briefly unavailable (~20s).')) return;
+  el('deploy-btn').disabled = true;
+  el('deploy-btn').innerHTML = '<span class="spinner"></span> Deploying…';
+  try {
+    const r = await api('/deploy/run', { method: 'POST' });
+    showSuccess(result, r.message);
+    show(el('logs-panel'));
+    setTimeout(tailLogs, 2000);
+    let ticks = 0;
+    const timer = setInterval(() => { tailLogs(); if (++ticks > 30) clearInterval(timer); }, 3000);
+  } catch (e) {
+    showError(result, e.message);
+  } finally {
+    el('deploy-btn').innerHTML = '⬇ Deploy latest';
+    setTimeout(() => { el('deploy-btn').disabled = false; renderStatus(); }, 90000);
+  }
+});
+
+async function tailLogs() {
+  try {
+    const r = await api('/deploy/logs?tail=300');
+    el('logs-out').textContent = r.logs;
+    el('logs-out').scrollTop = el('logs-out').scrollHeight;
+  } catch (e) {
+    el('logs-out').textContent = 'Error: ' + e.message;
+  }
+}
+
+el('logs-btn').addEventListener('click', () => { show(el('logs-panel')); tailLogs(); });
+el('logs-refresh').addEventListener('click', tailLogs);
+
+el('logout-btn').addEventListener('click', () => {
+  sessionStorage.removeItem(TOKEN_KEY);
+  token = '';
+  location.reload();
+});
+
+// Auto-unlock if we already have a token
+if (token) {
+  el('auth-btn').click = null;
+  (async () => {
+    try {
+      const res = await fetch('/api/deploy/status', { headers: { 'X-Deploy-Token': token } });
+      if (res.ok) {
+        hide(el('auth-panel'));
+        show(el('main-panel'));
+        renderStatus();
+      }
+    } catch (_) {}
+  })();
+}
+</script>
+</body>
+</html>
+"""
+
+
+@app.get("/__deploy", include_in_schema=False, response_class=HTMLResponse)
+async def deploy_page():
+    """Self-contained password-protected deploy console."""
+    return HTMLResponse(DEPLOY_PAGE_HTML)
 
 
 # ── Static file serving (production only) ───────────────────────────────────
