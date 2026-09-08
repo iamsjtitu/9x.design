@@ -13,6 +13,8 @@ import FAQ from './components/FAQ'
 import Contact from './components/Contact'
 import Footer from './components/Footer'
 import WhatsAppButton from './components/WhatsAppButton'
+import Privacy from './components/Privacy'
+import Terms from './components/Terms'
 
 function useScrollReveal() {
   useEffect(() => {
@@ -33,7 +35,7 @@ function useScrollReveal() {
   }, [])
 }
 
-export default function App() {
+function Landing() {
   useScrollReveal()
 
   return (
@@ -56,4 +58,16 @@ export default function App() {
       <WhatsAppButton />
     </div>
   )
+}
+
+export default function App() {
+  // Simple pathname-based routing (no external router dependency needed).
+  const path =
+    typeof window !== 'undefined'
+      ? window.location.pathname.replace(/\/$/, '') || '/'
+      : '/'
+
+  if (path === '/privacy') return <Privacy />
+  if (path === '/terms') return <Terms />
+  return <Landing />
 }
