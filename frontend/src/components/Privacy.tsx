@@ -41,9 +41,29 @@ export default function Privacy() {
         >
           Privacy <span className="gradient-text">Policy</span>
         </h1>
-        <p className="text-sm text-muted-foreground mb-12">
+        <p className="text-sm text-muted-foreground mb-8">
           Effective {effective}
         </p>
+
+        <div
+          className="mb-12 rounded-2xl border border-primary/40 bg-primary/5 p-6 sm:p-7"
+          data-testid="privacy-drive-file-callout"
+        >
+          <div className="flex items-start gap-3">
+            <ShieldCheck size={20} className="text-primary shrink-0 mt-0.5" />
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">
+                MillEntry Backup · Google Drive access
+              </div>
+              <p className="text-[15px] leading-[1.7] text-foreground">
+                MillEntry Backup only accesses the backup files it creates in your Google Drive
+                (<code className="bg-secondary px-1.5 py-0.5 rounded text-sm">drive.file</code> scope).
+                We do not store, read or share your Drive data. You can revoke access anytime from
+                your <strong>Google Account → Security → Third-party access</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-10 text-[15px] leading-[1.75] text-foreground/85">
           <section>

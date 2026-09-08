@@ -59,7 +59,19 @@ Original: https://github.com/iamsjtitu/9x-design-studio (Vite + React + TS + Tai
   - https://facebook.com/9x.design
 - `index.html` JSON-LD `sameAs` schema updated to match new socials.
 
+### Session 3 — 2026-02-08 (Google OAuth compliance for MillEntry Backup)
+- **New `Products.tsx` section on homepage** (rendered between Services and Process) showcasing:
+  - MillEntry — Complete rice-mill management platform
+  - **MillEntry Backup** — "Google Drive cloud backup for MillEntry" (explicit `drive.file` scope mention)
+  → Resolves Google OAuth reviewer complaint "App name doesn't match home page".
+- **Privacy page callout** — added a prominent highlighted box at the top of `/privacy` (above section 1) with EXACT verbatim text required by Google reviewer:
+  > "MillEntry Backup only accesses the backup files it creates in your Google Drive (drive.file scope). We do not store, read or share your Drive data. You can revoke access anytime from your Google Account → Security → Third-party access."
+- `data-testid="privacy-drive-file-callout"` added for test coverage.
+- **Testing**: `testing_agent` iteration_2.json → 8/8 passed (100%). No regressions on `/terms`, homepage sections, or console.
+- `yarn build` executed → `dist/` refreshed so FastAPI static server (SERVE_STATIC=true on VPS) serves the updated pages after `git pull && deploy.sh`.
+
 ## Prioritized backlog (P0 → P2)
+- P0 — User pushes this change to production VPS (`git pull && ./deploy.sh` OR `/__deploy` endpoint) and re-submits the Google OAuth verification form.
 - P0 — User must verify `9x.design` domain at https://resend.com/domains, then update `.env`:
   - Change `SENDER_EMAIL` from `onboarding@resend.dev` → `hello@9x.design` (or similar)
   - Change `RECEIVER_EMAIL` from `iamsjtitu@gmail.com` → `sales@9x.design`

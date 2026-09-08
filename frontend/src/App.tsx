@@ -6,6 +6,7 @@ import ClientLogos from './components/ClientLogos'
 import Services from './components/Services'
 import Process from './components/Process'
 import Portfolio from './components/Portfolio'
+import Products from './components/Products'
 import TechStack from './components/TechStack'
 import Pricing from './components/Pricing'
 import Testimonials from './components/Testimonials'
@@ -46,6 +47,7 @@ function Landing() {
         <Stats />
         <ClientLogos />
         <Services />
+        <Products />
         <Process />
         <Portfolio />
         <TechStack />
